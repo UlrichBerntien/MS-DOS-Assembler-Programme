@@ -1,0 +1,682 @@
+/*							      14.08.91
+**   Mit DEBUG das WANG-BIOS V1.65 (c) Wang 1985 untersucht.
+**   Int. 0x88 verfolgt.
+**   Die DEBUG ausgabe mit CNV aufbereitet.
+**
+**   Literatur:
+**    -  Wang PC : Program Development Tools
+**	 Kapitel D, BIOS Information
+*/
+
+/*
+**   Wichtige Adressen im Codesegment:
+*/
+
+0002 DW 02EFH		Segment der Daten
+
+/*
+**   Adressen im Segment der Daten für das Einlesen von Zeichen
+**   von der Tastatur.
+**   Als Ringbuffer organisiert
+*/
+
+02EA DW 256	       max. Zeichenanzahl im Buffer
+02EC DW (?)	       Nächste Leseposition aus dem Buffer
+02EE DW (?)	       Nächste Schreibposition in den Buffer
+02F0 DW (?)	       Anzahl der Zeichen im Buffer
+02F2 DW ????
+02F4 DB 256 DUP (?)    Tastatur-Eingabebuffer
+
+/*
+**   Adressen im Segment der Daten für das Einlesen von Zeichen
+**   aus der Centronics Schnittstelle.
+**   Als Ringbuffer organisiert
+*/
+
+0508 DW 16	       max. Zeichenanzahl im Buffer
+050A DW (?)	       Nächste Leseposition aus dem Buffer
+050C DW (?)	       Nächste Schreibposition in den Buffer
+050E DW (?)	       Anzahl der Zeichen im Buffer
+0510 DW ????
+0512 DB 16 DUP (?)     Centronics-Eingabebuffer
+
+/*
+**   Adressen im Segment der Daten für das Ausgeben von Zeichen
+**   aus der Centronics Schnittstelle.
+**   Als Ringbuffer organisiert
+*/
+
+0522 DW 256	       max. Zeichenanzahl im Buffer
+0524 DW (?)	       Nächste Leseposition aus dem Buffer
+0526 DW (?)	       Nächste Schreibposition in den Buffer
+0528 DW (?)	       Anzahl der Zeichen im Buffer
+052A DW ????
+052C DB 256 DUP (?)    Centronics-Ausgabebuffer
+
+/*
+**   Adressen im Segment der Daten für die Ausgabe zur Tastatur
+**   Als Ringbuffer organisiert.
+*/
+
+062C DW 32	       max. Zeichenanzahl im Tastatur-Ausagbebuffers
+062E DW (?)	       Nächste Leseposition im Buffer
+0630 DW (?)	       Nächste Schreibposition im Buffer
+0632 DW (?)	       Anzahl der Zeichen im Buffer
+0634 DW ????
+0636 DB 32 DUP (?)     Tastatur-Ausgabebuffer
+
+65C DB (?)	      00 falls gerade Keyboard-Ausgabe läuft
+
+/*
+**   Adressen im Segment der Daten
+*/
+
+0718 DW 10H DUP (?)    Sprungtabelle zu den Subfunctions (siehe unten)
+
+0B88 DB (?)	       Buffer bei Ausgabe auf Screen
+
+/*
+**  Reset an Tastaur senden ?
+**  Clicker - Lautstärke auf 3
+**  Beeper  - Lautstärke auf 2
+**  Alle LEDs auschalten
+*/
+
+0964	mov   SI,0702			DS:SI auf die auszugebenden Zeichen
+0967	mov   CX,0004			es sind 4 Zeichen
+096A	jmp   096D			Zeichen an Tastatur senden
+096C	nop
+
+/*
+**  Segment der Daten :
+*/
+		  ùLautstärken einstellen
+0702	DB 06H,  20H,12H,  1DH
+			    ^LEDs ausschalten
+/*
+**  Ausgabe von Zeichen an die Tastatur.
+**
+**  Die Ausagbe erfolgt gebuffert. Das Unterprogramm 0x0A05 gibt aus
+**  dem Buffer der hier gefüllt wird die Zeichen aus.
+**
+**  Parameter:
+**	CX	Anzahl der auszugebenden Zeichen
+**    falls CX = 1
+**	BL	das auszugebende Zeichen
+**    sonst
+**	DS:SI	auf Buffer mit den auszugebenden Zeichen
+**
+**  Rückgabe:
+**	CARRY	falls Fehler aufgetreten
+*/
+
+096D	push  ES			register sichern
+096E	push  SI
+096F	push  DI
+0970	push  DX
+0971	push  CX
+0972	push  BX
+0973	push  AX
+0974	cld				Direction + ,für folgende Stringbefehle
+0975	mov   ES,CS:[0002]		es auf Segment der Daten
+097A	or    CX,CX
+097C	jz    09FC			keine Zeichen ausgeben -> Fehler
+097E	mov   AX,ES:[062C]		Ende des Ausgabebuffers
+0982	sub   AX,ES:[0632]		minus schon vergebener Bereich
+0987	cmp   AX,CX
+0989	jb    09FC			Rest reicht nicht, zum Fehlerausgang
+098B	pushf
+098C	cli				Interrupts ausschalten
+098D	test  BYTE PTR ES:[065C],FF	läuft eine Tastatur-Ausagabe ?
+0993	jz    09B0			ja, dann alles in den Buffer
+0995	push  CX			eine kleine Pause machen
+0996	mov   CX,0024
+0999	loop  0999
+099B	pop   CX
+099C	mov   AL,BL			bei CX = 1 : auszugebendes Zeichen in AL
+099E	dec   CX
+099F	jz    09A2
+09A1	lodsb				bei CX > 1 : auszugebendes Zeichen in AL
+09A2	mov   DX,10E8
+09A5	out   DX,AL			an Tastatur senden
+09A6	mov   BYTE PTR ES:[065C],00	Ausgabeaktivität vermerken
+09AC	jz    09F8			falls alles ausgegeben ist, fertig
+09AE	jmp   09D5
+09B0	cmp   CX,+01			falls CX > 1
+09B3	jne   09D5			  normales in den Buffer schreiben
+09B5	inc   WORD PTR ES:[0632]	ein Byte im Buffer reservieren
+09BA	mov   DI,ES:[0630]		dort in den Buffer schreiben
+09BF	mov   ES:[DI+0636],BL		das auszugebende Byte in den Buffer
+09C4	inc   DI			Schreibposition weiterbewegen
+09C5	cmp   DI,ES:[062C]		Ende des Buffers erreicht ?
+09CA	jnz   09CE
+09CC	xor   DI,DI			  ja, wieder vorne anfangen (Ringbuffer)
+09CE	mov   ES:[0630],DI		Schreibposition abspeichern
+09D3	jmp   09F8			Arbeit erfolgreich beendet
+09D5	add   ES:[0632],CX		Bytes in Buffer reservieren
+09DB	mov   DI,ES:[0630]		mit ES:DI im Tastaturbuffer adressieren
+09DF	mov   DX,ES:[062C]		Ende des Buffers merken
+09E4	lodsb
+09E5	mov   ES:[DI+0636],AL		Zeichen in den Buffer übertragen
+09EA	inc   DI
+09EB	cmp   DI,DX			Ende des Buffers erreicht ?
+09ED	jne   09F1
+09EF	xor   DI,DI			  ja, wieder vorne anfangen (Ringbuffer)
+09F1	loop  09E4
+09F3	mov   ES:[0630],DI		Schreibposition speichern
+09F8	popf				ggf. Interrupts wieder erlauben
+09F9	clc				Erfolgsausgang mit gelöschtem CARRY
+09FA	jmp   09FD
+09FC	stc				Fehlerausgang mit gesetztem CARRY
+09FD	pop   AX			regsister zurück
+09FE	pop   BX
+09FF	pop   CX
+0A00	pop   DX
+0A01	pop   DI
+0A02	pop   SI
+0A03	pop   ES
+0A04	ret				Rücksprung
+
+/*
+**  Unterprogramm Sendet Zeichen aus dem Buffer zur Tastatur
+**  Wird über Interrupt angesprungen ?
+*/
+
+0A05	cmp   WORD PTR [0632],+00	ist ein Zeichen im Buffer ?
+0A0A	jz    0A2F			 nein
+0A0C	dec   WORD PTR [0632]		ein Zeichen wird jetzt ausgegeben
+0A10	mov   BX,[062E] 		Leseposition im Buffer laden
+0A14	mov   AL,[BX+0636]		Zeichen aus Buffer lesen
+0A18	inc   BX			Leseposition eins weiter
+0A19	cmp   BX,[062C] 		ist Bufferende erreicht ?
+0A1D	jnz   0A21			  nein
+0A1F	xor   BX,BX			  ja, wieder von vorne (Ringbuffer)
+0A21	mov   [062E],BX 		nächste Leseposition speichern
+0A25    mov   CX,0024                 
+0A28	loop  0A28			kleine Wartezeit
+0A2A    mov   DX,10E8                 
+0A2D	out   DX,AL			Zeichen zur Tastatur senden
+0A2E    ret                           
+
+0A2F	mov   DX,10E6			??
+0A32    out   DX,AL                   
+0A33    mov   BYTE PTR [065C],FF      
+0A38    ret                           
+
+/*
+**  Behandelt Ein- und Ausgaben- über die Centronics-Schnittstelle
+**  Wird vermutlich über einen entsprechenden Interruput aufgerufen.
+*/
+
+0A39	mov   DX,1020			Statusport der Centronics Schnittstelle
+0A3C	in    AL,DX			   abfragen
+0A3D	test  AL,04			ist EOF (end of paper)
+0A3F    jnz   0A56                    
+0A41    xor   AL,AL                   
+0A43	mov   BX,0004			event "Parallel port input ready"
+0A46    call  0AD2                    
+0A49    jnb   0A56                    
+0A4B	call  0AAB			Daten von Centronic Schnittstelle lesen
+0A4E    mov   AL,FF                   
+0A50	mov   BX,0004			event "Parallel port input ready"
+0A53    call  0AD2                    
+0A56	mov   DX,1020			Statusport der Centronics Schnittstelle
+0A59    in    AL,DX                   
+0A5A    test  AL,80                   
+0A5C    jz    0A77                    
+0A5E    xor   AL,AL                   
+0A60	mov   BX,0005			event "Parallel port output ready"
+0A63    call  0AD2                    
+0A66	jnc   0A77
+0A68    mov   DX,10EC                 
+0A6B    out   DX,AL                   
+0A6C	call  0A7C			Zeichen aus Buffer auf Centronics geben
+0A6F    mov   AL,FF                   
+0A71	mov   BX,0005			event "Parallel port output ready"
+0A74    call  0AD2                    
+0A77    mov   DX,10EC                 
+0A7A    in    AL,DX                   
+0A7B    ret                           
+
+/*
+**  Ausgabe auf die Centronis Schnittstelle aus dem Buffer
+**  wird über Interruput aufgerufen ?
+*/
+
+0A7C	cmp   WORD PTR [0528],+00	ist Buffer leer ?
+0A81	jnz   0A89			nein, dann ausgeben
+0A83    mov   BYTE PTR [065D],FF      
+0A88	ret				sonst sofort fertig
+0A89    mov   AH,AL                   
+0A8B	dec   WORD PTR [0528]		ein Zeichen aus Buffer nehmen
+0A8F	mov   BX,[0524] 		Leseposition im Buffer
+0A93	mov   AL,[BX+052C]		Zeichen aus Buffer lesen
+0A97	inc   BX			auf nächste Position
+0A98	cmp   BX,[0522] 		Bufferende erreicht ?
+0A9C    jnz   0AA0                    
+0A9E	xor   BX,BX			ja, wieder von vorne
+0AA0    mov   [0524],BX               
+0AA4	mov   DX,10EA			Datenport der Centronics Schinttstellen
+0AA7	out   DX,AL			Daten ausgeben
+0AA8    mov   AL,AH                   
+0AAA    ret                           
+
+/*
+**  Daten von Centronics Schnittstelle lesen
+**  und in einen Ringbuffer geben.
+*/
+
+0AAB	mov   DX,10EA			Datenport der Centronics Schnittstelle
+0AAE	in    AL,DX			Daten lesen
+0AAF	mov   CX,[0508] 		max Anzahl der Zeichen im Buffer
+0AB3	cmp   CX,[050E] 		ist der Buffer ganz voll ?
+0AB7	jz    0AD0			  ja, Daten gehen verloren
+0AB9	inc   WORD PTR [050E]		nein, ein Zeichen mehr im Buffer
+0ABD	mov   BX,[050C] 		Schreibposition
+0AC1	mov   [BX+0512],AL		in den Buffer geben
+0AC5	inc   BX			auf nächte Position
+0AC6	cmp   BX,CX			ist Bufferende erreicht ?
+0AC8    jnz   0ACC                    
+0ACA	xor   BX,BX			ja, dann von vorne
+0ACC	mov   [050C],BX 		nächste Schreibposition speichern
+0AD0    ret                           
+
+/*
+**  Löst die BIOS Software Events aus
+**
+**  Parameter:
+**	BX	der eventindex
+**	AL	== 0 für events 'go by hardware' vor eigener Behandlung
+**		!= 0 für events nach eigener Behandlung
+**  Rückgabe:
+**	CARRY falls keine Eventfunktion beim BIOS dazu angemeldet ist.
+*/
+
+0AD2	push  ds
+0AD3	push  es
+0AD4	mov   DS,CS:[0002]		ds auf Segment der Daten
+0AD9    or    AL,AL                   
+0ADB    jnz   0B3D                    
+0ADD    test  BYTE PTR [BX+073A],08   
+0AE2    jz    0B21                    
+0AE4    mov   AX,BX                   
+0AE6    shl   BX,1                    
+0AE8    mov   SI,[BX+075C]            
+0AEC    mov   BYTE PTR [08AC],00      
+0AF1    or    SI,SI                   
+0AF3    jz    0B17                    
+0AF5    test  BYTE PTR [SI+04],08     
+0AF9    jnz   0AFF                    
+0AFB    mov   SI,[SI]                 
+0AFD    jmp   0AF1                    
+0AFF    mov   BX,[SI]                 
+0B01    mov   [08AA],BX               
+0B05    push  AX                      
+0B06    push  DS                      
+0B07    call  FAR [SI+06]             
+0B0A    pop   DS                      
+0B0B    pop   AX                      
+0B0C    mov   SI,[08AA]               
+0B10    mov   BYTE PTR [08AC],FF      
+0B15    jmp   0AF1                    
+0B17    cmp   BYTE PTR [08AC],00      
+0B1C    jz    0B71                    
+
+0B1E    clc                           
+0B1F    jmp   0B72                    
+
+0B21    mov   AX,BX                   
+0B23    shl   BX,1                    
+0B25    mov   SI,[BX+075C]            
+0B29    or    SI,SI                   
+0B2B    jz    0B71                    
+
+0B2D    test  BYTE PTR [SI+04],02     
+0B31    jnz   0B37                    
+0B33    mov   SI,[SI]                 
+0B35    jmp   0B29                    
+0B37    call  FAR [SI+06]             
+0B3A    clc                           
+0B3B    jmp   0B72                    
+
+0B3D    mov   AX,BX                   
+0B3F    shl   BX,1                    
+0B41    mov   SI,[BX+075C]            
+0B45    or    SI,SI                   
+0B47    jz    0B71                    
+
+0B49    test  BYTE PTR [SI+04],04     
+0B4D    jnz   0B53                    
+0B4F    mov   SI,[SI]                 
+0B51    jmp   0B45                    
+0B53    dec   WORD PTR [SI+0A]        
+0B56	jnz   0B4F
+0B58    mov   CX,[SI+0C]              
+0B5B    mov   [SI+0A],CX              
+0B5E    mov   BX,[SI]                 
+0B60    mov   [08AA],BX               
+0B64    push  AX                      
+0B65    push  DS                      
+0B66    call  FAR [SI+06]             
+0B69    pop   DS                      
+0B6A    pop   AX                      
+0B6B    mov   SI,[08AA]               
+0B6F    jmp   0B45                    
+0B71    stc                           
+0B72    pop   ES                      
+0B73    pop   DS                      
+0B74    ret                           
+
+/*
+**  Adresse des Interrupt 0x88	=  0040:0B75
+**
+**  Handle des Interrupts 0x88 :
+**  Verteilt über eine Sprungtabelle die Subfunktions.
+**  Erlaubt die Subfunctions 0x00 .. 0x10
+*/
+
+regs STRUC	       Struktur der Register auf dem Stack.
+  rax  DW (?)	       wird vom Int 88 Handler angelegt.
+  rbx  DW (?)	       bei Aufruf der Subfunctions zeigt SS:BP hierauf
+  rcx  DW (?)
+  rdx  DW (?)
+  rbp  DW (?)
+  rdi  DW (?)
+  rsi  DW (?)
+  res  DW (?)
+  rds  DW (?)
+regs ENDS
+
+0B75	cmp   AL,11
+0B77	jb    0B7C			gültiger subfunctioncode
+0B79	mov   AL,01			completion code "function index invalid"
+0B7B    iret                          
+0B7C	push  DS			register sichern
+0B7D    push  ES                      
+0B7E    push  SI                      
+0B7F	push  DI			  .
+0B80	push  BP			  .
+0B81	push  DX			  .
+0B82	push  CX			= [BP+04]
+0B83	push  BX			= [BP+02]
+0B84	push  AX			= [BP+00]
+0B85	mov   DS,CS:[0002]		ds auf Segment der Dsten
+0B8A	mov   BP,SP			mit BP die alten Register adressieren
+0B8C    mov   BL,AL                   
+0B8E	xor   BH,BH			BX := Subfunction-Index
+0B90	shl   BX,1			in der Sprungtabelle adresseiren
+0B92	jmp   [BX+0718] 		Sprung zu den Subfunktions
+
+/*
+**  Rücksprungcode für alle Subfunktionen
+*/
+
+0B96	mov   BYTE PTR [BP+00],00	completion code: "Function completed
+0B9A	pop   AX					  normaly"
+0B9B    pop   BX                      
+0B9C    pop   CX                      
+0B9D    pop   DX                      
+0B9E	pop   BP			alle Register wieder zurück
+0B9F    pop   DI                      
+0BA0    pop   SI                      
+0BA1    pop   ES                      
+0BA2    pop   DS                      
+0BA3	iret				Interrupt Bearbeitung beendet
+
+**  die Sprungtabelle im Datenbereich
+*/
+
+0718	DW 0BAA 	subfunction 0x00   get system name
+	DW 0BB4 		    0x01   get system configuration table
+	DW 0BBE 		    0x02   set event trap
+	DW 0C61 		    0x03   clear event trap
+	DW 0BA4 		    0x04   function not been implemented
+	DW 0BA4 		    0x05   function not been implemented
+	DW 0CBB 		    0x06   send character to screen
+	DW 0CF3 		    0x07   send one or more byte to keyboard
+	DW 0D0E 		    0x08   ?
+	DW 0D36 		    0x09   set up dma channel
+	DW 0DCB 		    0x0A   allocate dma channel
+	DW 0E0A 		    0x0B   free dma channel
+	DW 0E56 		    0x0C   set or clear ^S ^Q enable flag
+	DW 0CD9 		    0x0D   send more charecters to screen
+	DW 0E74 		    0x0E   ?
+	DW 0EC9 		    0x0F   ?
+	DW 0F54 		    0x10   warmboot
+
+/*
+**   Subfunction 0x04, und
+**   Subfunction 0x05
+*/
+
+0BA4	mov   BYTE PTR [BP+00],02	completion code "not been implemented"
+0BA8	jmp   0B9A			aus Interrupt mit Fehler zurück
+
+/*
+**  Subfunction 0x07, Send one or more byte to keyboard
+**
+**  Parameter:
+**	CX	Anzahl der Zeichen
+**    falls CX = 1
+**	BL	das zu sendende Zeichen
+**    sonst
+**	DS:DX	auf einen Buffer mit den zu sendenden Zeichen
+*/
+
+0CF3	mov   BL,[BP+02]		BL laden, fΦr den Fall CX = 1
+0CF6	mov   CX,[BP.RCX]		CX Anzahl der Zeichen
+0CF9	mov   DS,[BP.RDS]
+0CFC	mov   SI,[BP.RDX]		DS:SI auf die auszugebenden Zeichen
+0CFF    call  096D                    
+0D02	jnc   0D0B			falls kein fehler, sonst:
+0D04	mov   BYTE PTR [BP+00],05	completion code "keyboard buffer full"
+0D08	jmp   0B9A			Fehlerausgang der Interrupt Behandlung
+0D0B	jmp   0B96			erfolgreiche Interrupt Behandlung
+
+/*
+**   Subfunction 0x06  Send character to screen
+**
+**  Parameter:
+**	BL	das auszugebende Zeichen
+**	BH	Nummer des Bildschirms (=00)
+*/
+
+0CBB    test  BYTE PTR [0663],FF      
+0CC0	jnz   0D2F			es gibt keinen Bildschirm
+0CC2	mov   AX,[BP.RBX]
+0CC5	mov   ES,CS:[0002]		es auf Segment der Daten
+0CCA	mov   BX,08BB			ES:BX auf ein Byte Buffer in Daten
+0CCD	mov   CX,0001			ein Zeichen ausgeben
+0CD0	mov   [BX],AL			auszugebendes Zeichen in Buffer geben
+0CD2    xor   AL,AL                   
+0CD4    int   8B                      
+0CD6	jmp   0B96			erfolgreiche Interrupt Behandlung
+
+/*
+**   Subfunction 0x0D, Send more characters to screen
+**
+**  Parameter:
+**	CX	Anzahl der Zeichen
+**	DS:DX	auf Buffer mit den Zeichen
+**	BH	Nummer des Bildschirms, (= 00)
+*/
+
+0CD9    test  BYTE PTR [0663],FF      
+0CDE	jnz   0D2F			es gibt keinen Bildschirm
+0CE0	mov   AH,[BP+03]		Nummer des Bildschirms
+0CE3	mov   CX,[BP.RCX]		Anzahl der Zeichen
+0CE6	mov   ES,[BP.RDS]
+0CE9	mov   BX,[BP.RDX]		ES:BX auf die auszugebenden Zeichen
+0CEC    xor   AL,AL                   
+0CEE    int   8B                      
+0CF0	jmp   0B96			erfolgreiche Interrupt Behandlung
+
+/*
+**  Beschreibung des Interrupt 0x8B
+**
+**     Ausgabe auf Bildschirm
+**  AL = 00
+**  AH	   Nummer des Bildschirms (=00)
+**  CX	   Anzahl der auszugebenden Zeichen
+**  ES:BX  auf Buffer mit den Zeichen
+*/
+
+/*
+**   Subfunction 0x08, ??
+**
+**   Ausgabe auf Bildschirm ?
+**
+**  Parameter:
+**	DS:BX	auf ?
+*/
+
+0D0E    test  BYTE PTR [0663],FF      
+0D13	jnz   0D2F			es gibt keinen Bildschirm
+0D15    mov   AX,DS                   
+0D17	mov   ES,AX			es auf segment der Daten
+0D19	mov   DS,[BP.RDS]
+0D1C	mov   BX,[BP.RBX]
+0D1F    cmp   BYTE PTR [BX+02],02     
+0D23    jnb   0D2A                    
+0D25    int   91                      
+0D27	jmp   0B96			erfolgreiche Interrupt Behandlung
+0D2A    int   95                      
+0D2C	jmp   0B96			erfolgreiche Interrupt Behandlung
+
+0D2F	mov   BYTE PTR [BP+00],04	Completion code "operation impossible"
+0D33	jmp   0B9A			aus Interrupt mit Fehler zurück
+
+/*
+**   Subfunction 0x0E, ?
+**
+**   Zeichen an Tastatur senden ?
+**   Lesen von Tastatur ?
+**
+**  Parameter:
+**	BL	Index 0,1,2,3 ????
+**  Rückgabe:
+**	BL
+**	BH
+*/
+
+0E74	test  BYTE PTR [0663],FF
+0E79	jz    0E82			es gibt einen Bildschirm
+0E7B	mov   BYTE PTR [BP+00],04	Completion code "operation impossible"
+0E7F	jmp   0B9A			aus Interrupt mit Fehler zurück
+0E82    mov   BL,[BP+02]              
+0E85    cmp   BL,03                   
+0E88    jbe   0E91                    
+0E8A	mov   BYTE PTR [BP+00],03	Completion code "invalid parameter"
+0E8E	jmp   0B9A			aus Interrupt mit Fehler zurück
+0E91	xor   BH,BH			BX = Index
+0E93	shl   BX,1			in Tabelle mit Words adressieren
+0E95	mov   BX,[BX+08B3]
+0E99    mov   [0706],BH               
+0E9D	mov   CX,0001			ein Zeichen an Tastatur senden
+0EA0	cli				Interrupts verhindern
+0EA1    call  096D                    
+0EA4    sti                           
+0EA5	jc    0EA0			falls Buffer voll war wiederholen
+0EA7	test  BYTE PTR [0706],FF	warte bis Byte [0706H] gelöscht ist
+0EAC    jnz   0EA7                    
+0EAE	test  BH,02
+0EB1	jnz   0EBD
+0EB3    mov   BL,[0707]               
+0EB7    mov   [BP+02],BL              
+0EBA	jmp   0B96			erfolgreiche Interrupt Behandlung
+0EBD    mov   BX,[0707]               
+0EC1    xchg  BL,BH                   
+0EC3    mov   [BP+02],BX              
+0EC6	jmp   0B96			erfolgreiche Interrupt Behandlung
+
+/*
+**   Tabelle aus dem Datenbereich:
+*/
+
+08B3  0E 82 09 81 0F-81 1E 81 48 0C 02 00 04		........H....
+
+in Words:
+08B3	DW 820E
+	DW 8109
+	DW 810F
+	DW 811E
+
+/*
+**   Subfunction 0x0F, ?
+**	Auslösen von BIOS trappable events.
+**
+**  Parameter:
+**	BL	?
+**  Rückgabe:
+**	BX
+**	CX
+**	DX
+*/
+
+0EC9    mov   AL,[BP+02]              
+0ECC    cmp   AL,02                   
+0ECE    jbe   0EEE                    
+0ED0    cmp   AL,04                   
+0ED2    ja    0EE7                    
+0ED4    xor   BX,BX                   
+0ED6    mov   BL,AL                   
+0ED8    add   BL,06                   
+0EDB    xor   AX,AX                   
+0EDD    call  0AD2                    
+0EE0	mov   BYTE PTR [BP+00],00	Competion code "completed normaly"
+0EE4	jmp   0B9A			aus Interrupt mit Fehler zurück
+0EE7	mov   BYTE PTR [BP+00],03	Competion code "invalid parameter"
+0EEB	jmp   0B9A			aus Interruput mit Fehler zurück
+0EEE    mov   DI,02EA                 
+0EF1    or    AL,AL                   
+0EF3    jnz   0F07                    
+0EF5    mov   WORD PTR [DI+02],0000   
+0EFA    mov   WORD PTR [DI+04],0000   
+0EFF    mov   WORD PTR [DI+06],0000   
+0F04	jmp   0B96			erfolgreiche Interrupt Behandlung
+0F07    cmp   WORD PTR [DI+06],+00    
+0F0B    jnz   0F1B                    
+0F0D    push  BP                      
+0F0E    call  0924                    
+0F11    pop   BP                      
+0F12    jb    0F1B                    
+0F14	mov   BYTE PTR [BP+00],05	Competition Code "event Queue or
+							  keyborad buffer full"
+0F18	jmp   0B9A			aus Interrupt mir Fehler zurück
+0F1B    mov   BX,[DI+02]              
+0F1E    mov   CX,0001                 
+0F21    mov   DL,[BX+DI+0A]           
+0F24    mov   DH,DL                   
+0F26    and   DH,FE                   
+0F29    cmp   DH,1E                   
+0F2C    mov   DH,00                   
+0F2E    jnz   0F3D                    
+0F30    mov   DH,DL                   
+0F32    inc   BX                      
+0F33    cmp   BX,[DI]                 
+0F35    jnz   0F39                    
+0F37    xor   BX,BX                   
+0F39    mov   DL,[BX+DI+0A]           
+0F3C    inc   CX                      
+0F3D    mov   [BP+02],DX              
+0F40    cmp   AL,01                   
+0F42    jz    0F51                    
+0F44    inc   BX                      
+0F45    cmp   BX,[DI]                 
+0F47    jnz   0F4B                    
+0F49    xor   BX,BX                   
+0F4B    mov   [DI+02],BX              
+0F4E    sub   [DI+06],CX              
+0F51	jmp   0B96			erfolgreiche Interrupt Behandlung
+
+/*
+**   Subfunction 0x0F, warmboot
+**
+**   Parameter:
+**	   keine
+*/
+
+0F54    mov   DX,1028                 
+0F57    xor   AL,AL                   
+0F59    out   DX,AL                   
+0F5A	jmp   FFFE:0009 		Power on reset direkt aufrufen

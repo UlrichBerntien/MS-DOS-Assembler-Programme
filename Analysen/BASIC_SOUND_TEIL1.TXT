@@ -1,0 +1,235 @@
+/*                                                                13.08.91
+**  Analyse der Tonerzeugung in "Wang Interpretativ Basic V1.03"
+**  mit SEARCHER.EXE mode 3 gesucht nach Int. 88H, subcode 07
+**  Aufrufe, die nur dann entstehen, wenn der beep Befehl gegeben
+**  wird und nciht wenn nur der system Befehl gegeben wird.
+**
+**   Mit DEBUG die beiden Stellen aufgesucht und ausgeben, mit CNV
+**   aufgearbeitet.
+**
+**   die Stellen sind   601D:3699  und 601D:37BE
+**
+**   alle von SEARCHER beobachten Int. 21H und Int. 88H Aufrufe
+**   stammen aus dem Segment 601D.
+**   (Aufruf mit DEBUG SEARCHER.EXE 3 D:OUT3, geladen war zuvor
+**   eine 300 KByte RAM-Disk, Paralleldruckertreiber, Command)
+*/
+
+/*
+**  Basic benutzt Speicher-Modell Small
+**  maximal 64 Kbyte Code, maximal 64 KByte Daten
+**  jedes in seinem eigenen Segment
+**
+**  Bedeutung einiger Adressen im Datensegment von Basic
+*/
+
+08A0 DW (?)         wird heruntergezählt, mißt Zeiten für die Tondauer
+09DC DB 5 DUP (?)   Zwischenspeicher für auszugebende Tastatursequenzen
+338C DW (?)         Datensegment von Basic
+
+/*
+**  601D:35F0   -  601D:3717
+**
+**  in DX wird die Tondauer aus dem sound-Befehl übergeben mit dem
+**    Faktor 22 multipliziert
+**    -> eine Zeiteinheit der Tondauer im sound-Befehl sind 55 msec
+*/
+
+35F0    push  AX
+35F1    push  BX
+35F2    push  CX
+35F3    push  DX
+35F4    push  SI
+35F5    push  DI
+35F6    cmp   CX,+7A
+35F9    jnb   35FD
+35FB    xor   CX,CX
+35FD    cmp   AL,01
+35FF    jz    3639
+3601    mov   BH,AL
+3603    mov   WORD PTR [08A0],0000
+3609    mov   BYTE PTR [09D8],00
+360E    mov   BYTE PTR [09D9],00
+3613    mov   BYTE PTR [09DA],00
+
+3618    push  CX
+3619    push  DX
+361A    mov   AL,07                     send bytes to keyboard
+361C    mov   BYTE PTR [09DC],31
+3621    mov   BYTE PTR [09DD],BF
+3626    mov   DX,09DC                   ds:dx auf die auszugebenden bytes
+3629    mov   CX,0002                   soviele bytes ausgeben
+362C    int   88                        bios call            --> 31,BF ausgeben
+362E    pop   DX
+362F    pop   CX
+
+3630    mov   AL,BH
+3632    or    AL,AL
+3634    jz    3639
+3636    jmp   3711
+3639    mov   SI,AX
+363B    mov   DI,DX
+363D    mov   AX,E848
+3640    mov   DX,0001
+3643    or    CX,CX
+3645    jnz   364B
+3647    xor   AX,AX
+3649    jmp   364D
+364B    div   CX
+364D    xchg  SI,AX
+364E    cmp   WORD PTR [08A0],+00
+3653    jnz   36B7
+3655    push  AX
+3656    mov   DX,SI
+3658    mov   AL,07
+365A    mov   BYTE PTR [09DC],32
+365F    mov   BL,DL
+3661    and   BL,0F
+3664    or    BL,A0
+3667    mov   [09DD],BL
+366B    shr   DX,1
+366D    shr   DX,1
+366F    shr   DX,1
+3671    shr   DX,1
+3673    and   DL,3F
+3676    mov   [09DE],DL
+367A    mov   BYTE PTR [09DF],31
+367F    or    SI,SI
+3681    jnz   368A
+3683    mov   BYTE PTR [09E0],BF
+3688    jmp   368F
+368A    mov   BYTE PTR [09E0],B0
+368F    push  DX
+3690    push  CX
+3691    mov   CX,0005                   soviele bytes ausgaben
+3694    mov   DX,09DC                   ds:dx auf die auszugebenden bytes
+3697    mov   AL,07                     send bytes to keyboard
+3699    int   88                        bios call
+369B    pop   CX
+369C    pop   DX
+369D    pop   AX
+369E    shr   DI,1                      di enthält die tondauer * 22
+36A0    shr   DI,1                      di = di / 4
+36A2    or    DI,DI
+36A4    jz    36F9
+36A6    mov   [08A0],DI                 zähler setzen
+36AA    cmp   AL,01
+36AC    jz    3711
+36AE    cmp   WORD PTR [08A0],+00
+36B3    jnz   36AE
+36B5    jmp   3711
+36B7    test  BYTE PTR [09DA],FF
+36BC    jz    36C5
+36BE    test  BYTE PTR [09DA],FF
+36C3    jnz   36BE
+36C5    mov   BL,[09D9]
+36C9    xor   BH,BH
+36CB    shl   BX,1
+36CD    shl   BX,1
+36CF    shr   DI,1
+36D1    shr   DI,1
+36D3    or    DI,DI
+36D5    jz    36F7
+36D7    mov   [BX+08D8],SI
+36DB    mov   [BX+08DA],DI
+36DF    inc   BYTE PTR [09D9]
+36E3    and   BYTE PTR [09D9],3F
+36E8    mov   BL,[09D9]
+36EC    cmp   BL,[09D8]
+36F0    jnz   36F7
+36F2    mov   BYTE PTR [09DA],FF
+36F7    jmp   3711
+
+36F9    push  CX
+36FA    push  DX
+36FB    mov   BYTE PTR [09DC],31
+3700    mov   AL,07                     send bytes to keyboard
+3702    mov   BYTE PTR [09DD],BF
+3707    mov   DX,09DC                   ds:dx auf die auszugeben bytes
+370A    mov   CX,0002                   soviel bytes ausgeben
+370D    int   88                        bios call           -->  31,BF ausgeben
+370F    pop   DX
+3710    pop   CX
+
+3711    pop   DI
+3712    pop   SI
+3713    pop   DX
+3714    pop   CX
+3715    pop   BX
+3716    pop   AX
+3717    ret
+
+/*
+**  601D:3718   -  601D:37C2
+**  wird über Timerinterrupt alle 10 msec aufgerufen
+*/
+
+3718    push  DS
+3719    push  AX
+371A    mov   AX,CS:[338C]
+371E    mov   DS,AX                     ds auf dgroup von basic
+3720    cmp   WORD PTR [08A0],+00
+3725    jnz   372A
+3727    pop   AX
+3728    pop   DS
+3729    retf
+
+372A    dec   WORD PTR [08A0]
+372E    jnz   3727
+3730    mov   BL,[09D8]
+3734    cmp   BL,[09D9]
+3738    jnz   3741
+373A    test  BYTE PTR [09DA],FF
+373F    jz    37AA
+3741    xor   BH,BH
+3743    shl   BX,1
+3745    shl   BX,1
+3747    mov   DI,BX
+3749    mov   DX,[BX+08D8]
+374D    push  SI
+374E    mov   SI,DX
+3750    push  CX
+3751    push  DX
+3752    mov   BYTE PTR [09DC],32
+3757    mov   AL,07                     send bytes to keyboard
+3759    mov   BL,DL
+375B    and   BL,0F
+375E    or    BL,A0
+3761    mov   [09DD],BL
+3765    shr   DX,1
+3767    shr   DX,1
+3769    shr   DX,1
+376B    shr   DX,1                      dx = dx / 16
+376D    and   DL,3F
+3770    mov   [09DE],DL
+3774    mov   BYTE PTR [09DF],31
+3779    or    SI,SI
+377B    jnz   3784
+377D    mov   BYTE PTR [09E0],BF
+3782    jmp   3789
+3784    mov   BYTE PTR [09E0],B0
+3789    mov   CX,0005                   soviele bytes ausgeben
+378C    mov   DX,09DC                   ds:dx auf auszugebende bytes
+378F    int   88                        bios call
+3791    pop   DX
+3792    pop   CX
+3793    mov   BX,DI
+3795    mov   DX,[BX+08DA]
+3799    mov   [08A0],DX
+379D    inc   BYTE PTR [09D8]
+37A1    and   BYTE PTR [09D8],3F
+37A6    pop   SI
+37A7    jmp   3727
+
+37AA    push  CX
+37AB    push  DX
+37AC    mov   AL,07                     send bytes to keyboard
+37AE    mov   BYTE PTR [09DC],31
+37B3    mov   BYTE PTR [09DD],BF
+37B8    mov   CX,0002                   soviele bytes
+37BB    mov   DX,09DC                   ds:dx auf die zu senden bytes
+37BE    int   88                        bios call            --> 31,BF ausgeben
+37C0    pop   DX
+37C1    pop   CX
+
+37C2    jmp   3727

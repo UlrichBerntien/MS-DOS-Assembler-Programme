@@ -1,0 +1,95 @@
+/*                                                            13.08.91
+**  Analyse des "Wang Interpretative Basic V1.03"
+**  mit SEARCH2.
+*/
+
+
+system <                im Basic-Interpreter eingeben
+
+  2: 31 BF              Ausgabe von SEARCH2
+  2: 31 BF
+  2: 31 BF
+
+beep <
+system <
+
+  2: 31 BF              >
+  2: 31 BF              >  Standartvorspann von Basis
+  2: 31 BF              >  leises klicken im Lautsprecher zu hören
+  2: 31 BF              )
+  5: 32 AC 09 31 B0     )  ausgelöst durch beep Befehl
+  2: 31 BF              )
+
+beep <
+beep <
+system <
+
+  2: 31 BF              >
+  2: 31 BF              >  Standartvorspann von Basis
+  2: 31 BF              >
+  2: 31 BF              )
+  5: 32 AC 09 31 B0     )  ausgelöst durch ersten beep
+  2: 31 BF              )
+  2: 31 BF              >
+  5: 32 AC 09 31 B0     >  ausgelöst duch zweiten beep
+  2: 31 BF              >
+
+sound 37,1 <            Ton 37 Herz
+system <
+
+  2: 31 BF
+  2: 31 BF
+  2: 31 BF
+  2: 31 BF              )
+  5: 32 A0 00 31 BF     )  ausgelöst durch sound 37
+  2: 31 BF              )
+
+sound 37,100            andere Tondauer, gleiche Ausagabe an Tastatur
+system <                    => es muß ein anderen Mechanismus für das
+                               einstellen der Tondauer geben
+  2: 31 BF
+  2: 31 BF
+  2: 31 BF
+  2: 31 BF
+  5: 32 A0 00 31 BF
+  2: 31 BF
+
+sound 37,1 <
+sound 255,1 <
+sount 514,1 <
+system
+
+  2: 31 BF
+  2: 31 BF
+  2: 31 BF
+  2: 31 BF
+  5: 32 A0 00 31 BF
+  2: 31 BF
+  2: 31 BF
+  5: 32 AA 1E 31 B0
+  2: 31 BF
+  2: 31 BF
+  5: 32 A3 0F 31 B0
+  2: 31 BF
+
+sound 601,1 <
+sound 602,1 <
+sound 603,1 <
+sound 604,1 <
+system <
+
+  2: 31 BF
+  2: 31 BF
+  2: 31 BF
+  2: 31 BF
+  5: 32 AF 0C 31 B0
+  2: 31 BF
+  2: 31 BF
+  5: 32 AF 0C 31 B0
+  2: 31 BF
+  2: 31 BF
+  5: 32 AF 0C 31 B0
+  2: 31 BF
+  2: 31 BF
+  5: 32 AE 0C 31 B0
+  2: 31 BF

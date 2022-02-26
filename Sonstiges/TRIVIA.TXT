@@ -1,0 +1,53 @@
+Trivia stammt aus der Serie "Künstliche Inteligenz-ein Anlauf für Mikrocomputer"
+ aus MC von Ulrich Rohde. Es wurde von mir umgeschrieben für ein MS-Dos 2 System
+ mit dem 8086.
+
+Dokumentation von Trivia
+-Zeiger von Trivia ab 200h:
+ 200h: Anfang des Namenpuffers
+ 202h: Ende des Namens
+ 204h: Zwischenstand des Namens
+ 206h: Länge des Namens
+ 208h: oberstes Element auf Liste(auf Adressspeicherwort)
+ 20Ah: nächstes freis Byte auf Liste
+ 20Ch: auf die aktuelle Anfangsadresse
+ 20Dh: Adresse der Adresse
+ 22Ch: Datenstack auf nächstes freies Byte
+ 22Eh: Datenstack auf erstes Byte
+-Befehle von Trivia:
++suche/
+ Erwartet auf Namenpuffer ein Kommando zur Auswertung. Nach diesem Wort wird in
+ der Befehlsliste gesucht. Wird es gfunden, wird 20Fh die Adresse des Befehls
+ abgelegt. wird das Schlüsselwort nicht gefunden kehrt suche/ mit gesetztem
+ Carry-Flag zurück.
++inbuf/
+ Erwartet eine Eingabe, die in den Namenpuffer geschrieben wird. Mit "/" wird
+ das Schlüsselwort abgeschlossen(nicht CR).
++hexin/
+ Erwartet eine Hexziffer 0..F auf der Konsole und ignoriet alle anderen Zei-
+ chen. Der Wert wird als 4-Bit-Muster in AL übergeben.
++hexbuf/
+ Erwartet eine zwei stellige Hexzahl und schreibt den Wert als Byte auf den
+ Pufferstack.(benutzt hexin/)
++dialog/
+ Erwartet eine einagbe, die mit "/" abgeschlossen wird. Ist es ein Kommando,
+ so wird es ausgeführt. Wenn das Wort nicht bekannt ist wird ein "E" ausgege-
+ ben. Das Prompt ist "C/".
++begin/
+ Auf das Sclüsselwort begin/ muß immer ein Name folgen, der mit "/" abge-
+ schlossen wird. Unter diesem Namen wird das neue Objekt auf dem Programstack
+ abgelegt.
++end/
+ Schließt ein mit begin/ eröffnetes Objekt ab.
++prog/
+ Erwartet Namen von bereits definierten Schlüsselworten. Ist dieses Wort auf
+ Programmstack vorhanden, dann wird die Adresse mit einem Call Befehl an das
+ aktuelle Objekt angefügt. Rekursiver Aufruf is möglich. z.B:
+	 begin/rekursion/prog/[andere Befehle]/rekursion/end/
++help/
+ Eine Routine, die von oben die Namen aller auf dem Stack befindlichen Objekte
+ auf der Konsole ausgibt. Das Terminal muß autolinefeed bieten.
++c/
+ Die Kommandoschleife von Trivia. c/ gibt CR Lf und "c/" aus und ruf danach
+ dialog/ auf. Bei einem Rücksprung aus Dialog wird c/ erneut abgearbeitet.
+

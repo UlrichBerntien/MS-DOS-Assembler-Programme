@@ -1,0 +1,212 @@
+
+********************************************************************************
+*                                                                              *
+*                                                                              *
+*       Dokumentation der Unterprogramm in der Libary 'USER'                   *
+*                                                                              *
+*                                                                              *
+*       Programmierspache:      Microsoft MACRO Assembler                      *
+*                               Version 1.1                                    *
+*                               Microsoft Pascal Compiler                      *
+*                               Version 3.04                                   *
+*                                                                              *
+*       Computersystem:         Wang PC                                        *
+*                               Epson FX-80                                    *
+*                                                                              *
+*       Programmierer:          Ulrich Berntien                                *
+*                               4018 Langenfeld                                *
+*                               -Germany-                                      *
+*                                                                              *
+*                                                                              *
+*             (c) Ulrich Berntien .06.1985 - .07.1988                          *
+*                                                                              *
+*                                                                              *
+********************************************************************************
+
+
+
+        Unterprogramme zur Nutzung der Wang Grafikkarte
+        -----------------------------------------------
+
+   Alle X-Werte müssen im Bereich von 0..799 liegen
+   Alle Y-Werte müssen im Bereich von 0..299 liegen
+   Sind diese Bedingung nicht erfüllt, so wird das Unterprogramm ohne
+   Fehlermeldung verlassen. Ausgenommen sind die Boolean-Funktionen.
+   Es werden die globalen Variablen GGSeg,GGSta,GGOut benutzt!
+
+Procedure Graphic
+   Holt die nötigen Daten für die Grafikroutinen
+   Die Prozedure muß einmal vor benutzung der Grafik aufgerufen werden
+   Sie wird bei dem Interface 'Graphic.PIn' automatisch aufgerufen
+
+Procedure Dot( X,Y :Integer )
+   Setzt den Punkt (X/Y) auf dem Grafikbildschirm
+
+Procedure CDot( X,Y :Integer )
+   Löscht den Punkt (X/Y) auf dem Grafikbildschirm
+
+Procedure LineV( Y1,Y2,X :Integer )
+   Zieht eine Linie vertikal von (X,Y1) nach (X,Y2)
+
+Procedure CLineV( Y1,Y2,X :Integer )
+   Löscht eine Linie vertikal von (X,Y1) nach (X,Y2)
+
+Procedure LineH( X1,X2,Y :Integer )
+   Zieht ein Linie horizontal von (X1/Y) bis (X2/Y)
+
+Procedure CLineH( X1,X2,Y :Integer )
+   Löscht ein Linie horizontal von (X1/Y) bis (X2/Y)
+
+Procedure LineP( X1,Y1,X2,Y2 :Integer )
+   Zieht eine Linie von Punkt( X1,Y1 ) nach Punkt( X2,Y2 )
+
+Procedure CLineP( X1,Y1,X2,Y2 :Integer )
+   Löscht eine Linie von Punkt( X1,Y1 ) nach Punkt( X2,Y2 )
+
+Procedure PutBild( Var  GDaten : Bild;
+                        X,Y    : Integer )
+  Die Funktion gibt ein Punktmuster auf den Grafikbildschirm mit Hilfe einer
+  XOR-Operation aus, d.h. dort wo im Bild ein Punkt gesetzt ist wird der
+  Punkt auf dem Grafikbildschirm invertiert. Die Koordinate X,Y bezieht
+  sich auf den linken oberen Punkt des Bildes. Im GDaten-Array bedeutet:
+   GDaten[1] = Breite des Bildes in 16er !! Punkten
+   GDaten[2] = Höhe des Bildes ,max. 256 Zeilen
+   GDaten[.] = Bildpunkte ,Zeilenweise
+
+Procedure Invert
+   Der Grafikbildschirm wird invertiert.
+
+Procedure Roll( R : Integer )
+   Der Grafikbildschirm wird gerollt
+   1 - up , 2 - right , 3 - down , 4 - left
+
+Procedure Print
+   Ausdruck des Grafikbildschirm auf dem FX-80, der Bildschirminhalt wird
+   dazu um 90° gedreht, um auf ca. eine A4-Seite zu passsen
+
+Function Load( Const Name :String ): Boolean
+   Der Grafikbildschirm wird aus dem File mit der Bezeichnung NAME geladen.
+   Tritt ein Fehler bei der Abarbeitung des Unterprogrammes auf, wird
+   der Wert FALSE zurückgegeben.
+
+Function Save( Const Name :String ): Boolean
+   Der Grafikbildschirm wird unter der Bezeichnung NAME abgespeichert.
+   Tritt ein Fehler bei der Abarbeitung des Unterprogrammes auf, wird
+   der Wert FALSE zurückgegeben.
+
+================================================================================
+
+
+
+
+
+
+
+        Unterprogramme zur Nutzung des Wang PC Terminals
+        ------------------------------------------------
+
+        Es wird die globale Variable TTSIB benutzt!
+
+Procedure Term
+   Die Prozedure wird durch das Interface 'Term.PIn' aufgerufen.
+   Sie stellt für folgende Prozeduren die Adresse TTSIB zur Verfügung,
+   löscht den Bilschirm, löscht alle Attribut, lehrt den Tastaturbuffer
+   und schaltet den Cursor ein.
+
+Procedure CRRS( Nr :Integer );
+   0 - Cursor einschalten  / 1 - ausschalten
+   2 - Blinken einschalten / 3 - ausschalten
+   4 - Underline           / 5 - Block
+
+
+Type Attribute = Set of (Top,Down,Under,Over,Bold,Blank,Reverse,Blink);
+Procedure ATTR (Para :Attribute);
+   die Schriftart wird nach dem Parameter geändert, es bedeuten:
+   Top   - Superscript          Down  - Subscript
+   Under - Underline            Over  - Overline
+   Bold  -                      Blank -
+   Reverse                      Blink
+
+Procedure ClLine( Y :Integer )
+   Die Zeile Y ( 1..25 ) wird gelöscht, der Cursor steht am Anfang
+   dieser Zeile.
+
+Procedure GotoXY( X,Y :Integer )
+   Die nächste Schreibposition ist (X/Y), der Cursor bleibt aber bis zu
+   dieser Ausgabe an der alten Position. ( X =1..80 / Y =1..25 )
+
+Procedure WhereXY(Var X,Y :Integer );
+   Den Variablen X,Y wird die aktuelle Cursorposition zugewiesen.
+
+Procedure PutChar( x,y :Integer, c :Char, a :Attribute );
+   Setzt das Zeichen c mit den Attributen a an die Stelle
+   (x,y) des Bildschirmspeichers
+
+Procedure PutATTR( x,y :Integer, a :Attribute );
+   Gibt dem Zeichen auf der Position (x,y) im Bildschirm-
+   speicher die Attribute a
+
+Function GetChar( x,y :Integer ): Char;
+   Liest das Zeichen an der Position (x,y) in dem Bild-
+   schirmspeicher
+
+Procedure SCRDump;
+   Die Procedure druckt den Inhalt des Bildscirms aus. Dabei wird die letzte
+   Spalte nicht gedruckt, ebenso werden Attribute nicht berücksichtigt.
+
+Type GenM = Array [1..12] of Byte;
+Procedure GetGen( n :Integer; Var z :GenM );
+  Liest von Zeichen# n das Font aus den Zeichengenerator
+
+Procedure PutGen( n :Integer; Var z :GenM );
+  Schreibt bei Zeichen# n das Font z in den Zeichengenerator
+
+Procedure CTrap ( On :Boolean )
+   Ein/Ausschalten der Verarbeitung der KTRL-C Taste bei DOS Aufrufen
+   über Funktion 33H.
+
+Procedure LED( Nr :Integer On :Boolean )
+   Das Unterprogramm schaltet die LED der Tastatur (Nr.0 bis Nr.5) an(=true)
+   oder aus(=false). Ist die Nummer -1 werden alle LEDs an-/ausgeschaltet.
+
+Function InKey :Byte
+   Die Funktion übergibt den WISCII-Wert der gedrükten Taste, ist keine
+   Taste gedrückt wird der Wert 00 ausgegeben.
+
+Function WaitKey :Byte
+   Die Funktion übergibt den WISCII-Wert der gedrükten Taste, ist keine
+   Taste gedrückt wartet die Prozedure auf eine Taste
+
+Function ReadInt :Integer
+   Die Funktion liest einen Integerwert ( -32749 bis 32749 ) von der Tastaur
+   und gibt ihn auf dem Bildschirm aus. Die Tasten 0,1..,9,BS,CR werden be-
+   rücksichtigt. Ist die Zahl größer als +-32749 wird +-MaxInt zurückgegeben.
+
+Procedure PortOut( Nr : Word; x : Byte );
+   Die Procedure gibt das Byte X auf den Port Nr aus
+
+================================================================================
+
+
+
+
+    Unterprogramme zur Druckeransteuerung
+    -------------------------------------
+
+Procedure SetTrans
+   Die Prozedure schaltet den Transparentmodus ein,
+   d.h. alle Zeichen zum Drucker werden ohne Code-
+   wandlung übertragen
+
+Procedure DelTrans
+   Die Prozedure hebt den Transparentmodus auf
+
+Procedure WriteP( Was : Char );
+   Direkte Ausgabe des Charakters Was auf dem Parallelausgang. Vor der Ausgabe
+   wird auf das READY-signal des Druckers gewartet.
+
+Procedure ReadP : Byte;
+   Liest das Statusbyte der Parallelschnittstelle ein. Es bedeuten:
+   Bit 4 (10h) = Busy
+   Bit 5 (20h) = Ready
+   Bit 6 (40h) = End of Paper [meist zusammen mit Busy]

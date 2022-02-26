@@ -1,0 +1,498 @@
+/*							      14.08.91
+**   Mit DEBUG das WANG-BIOS V1.65 (c) Wang 1985 untersucht.
+**   Die DEBUG Ausgabe mit CNV aufbereitet.
+**
+**   Vortsetzung von BIOS1.TXT.
+**
+**   Im Speicher befindet sich der hier beschriebene Code
+**   unmittelbar vor dem Code aus BIOS1.TXT, wie an den
+**   Adressen zu sehen ist.
+**
+**   Hier nur die Unterprogramme, die sich mit der
+**   Entgegennahme von Tastaturanschläge beschäftigen.
+*/
+
+/*
+**   Adressen im Segment der Daten für das Einlesen von Zeichen
+**   von der Tastatur.
+**   Als Ringbuffer organisiert
+*/
+
+02EA DW 256	       max. Zeichenanzahl im Buffer
+02EC DW (?)	       Nächste Leseposition aus dem Buffer
+02EE DW (?)	       Nächste Schreibposition in den Buffer
+02F0 DW (?)	       Anzahl der Zeichen im Buffer
+02F2 DW ????
+02F4 DB 256 DUP (?)    Tastatur-Eingabebuffer
+
+/*
+**   weitere Adressen im Segment der Daten
+*/
+
+0002 DW  Segment das die Tastatur Überstezungstabellen enthält
+
+0660 DB  falls != 0, die Ausgabe wurde mit ^S gestoppt
+070A DB  Informationen über Taste Fest,Cntrl.,Umsch
+070E DB    hat etwas zu tun mit festgehaltener Taste, Autorepeat Funktion
+070F DB
+0711 DW  zeischenspeichern der Tastencodes von der Tastatur
+	 Lowbyte  : neueres Zeichen
+	 Highbyte : älteres Zeichen
+0715 DB
+0716 DB
+
+/*
+**  Parameter:
+**	DS	auf Segment der Daten
+*/
+
+05B3	xor   AL,AL			AL = 0, d.h. event 'go by hardware'
+05B5	mov   BX,0006			event "keyboard input character ready"
+05B8	call  0AD2			bios event auslösen
+05BB    jnb   05EE                    
+05BD	mov   ES,[0002] 		ES auf Segment mit Tastencodetabelle
+05C1	mov   DX,10E8			von Tastaturport
+05C4	in    AL,DX			eingehendes Zeichen lesen
+05C5	mov   [0710],AL 		und zwischenspeichern
+05C8    mov   AH,AL                   
+05CA	call  07CE			ist es eine besondere Taste ?
+05CD    cmp   AL,AH                   
+05CF	je    05D4			nein
+05D1	jmp   075B			ja
+05D4	and   AL,7F			Bit 80H ausblenden ( 80H wird gesetzt
+					wenn die Taste im Moment gedrückt ist)
+05D6    cmp   AL,AH                   
+05D8	je    05EF			falls keine Taste im Monent gedrückt
+05DA    mov   AH,AL                   
+05DC	call  07CE			Sondertaste im ungedrücken Zustand ?
+05DF    cmp   AL,AH                   
+05E1	jnz   05EE			ja
+05E3    cmp   BYTE PTR [070E],00      
+05E8	je    05EE
+05EA    dec   BYTE PTR [070E]         
+05EE    ret                           
+
+05EF    test  BYTE PTR [0709],FF      
+05F4    jz    064D                    
+05F6    push  SI                      
+05F7    mov   BX,0080                 
+05FA	mov   DL,ES:[BX]
+05FD    shl   DL,1                    
+05FF    xor   DH,DH                   
+0601    add   BX,DX                   
+0603	mov   SI,ES:[BX+02]
+0607	mov   CX,ES:[SI]
+060A    inc   SI                      
+060B    inc   SI                      
+060C    mov   AH,[070B]               
+0610    mov   BH,[0709]               
+0614	cmp   AH,ES:[SI]
+0617    jnz   063F                    
+0619	cmp   AL,ES:[SI+01]
+061D    jnz   063F                    
+061F	cmp   BH,ES:[SI+02]
+0623    jnz   063F                    
+0625	mov   BH,ES:[SI+03]
+0629	mov   AH,ES:[SI+04]
+062D	mov   AL,ES:[SI+05]
+0631    mov   [0709],BH               
+0635    call  07EE                    
+0638    mov   BYTE PTR [070C],00      
+063D    pop   SI                      
+063E    ret                           
+
+063F    add   SI,+06                  
+0642    loop  0614                    
+0644    mov   BYTE PTR [0709],00      
+0649    pop   SI                      
+064A    jmp   064D                    
+064C    nop                           
+064D    inc   BYTE PTR [070E]         
+0651    mov   BX,0000                 
+0654    es:                           
+0655	xlat				AL = ES:[BX+AL]
+0656    cmp   AL,7F                   
+0658    jnz   0668                    
+065A    cmp   BYTE PTR [070E],00      
+065F    jz    0665                    
+0661    dec   BYTE PTR [070E]         
+0665    jmp   07CD                    
+0668	mov   AH,ES:[SI]
+066B    xor   BL,BL                   
+066D    add   SI,+03                  
+0670	cmp   AL,ES:[SI]
+0673    jbe   0684                    
+0675	mov   BL,ES:[SI]
+0678    inc   BL                      
+067A    add   SI,+05                  
+067D    dec   AH                      
+067F    jnz   0670                    
+0681    jmp   074F                    
+0684    sub   AL,BL                   
+0686	mov   AH,ES:[SI]
+0689    sub   AH,BL                   
+068B    inc   AH                      
+068D    inc   SI                      
+068E	mov   DH,ES:[SI]
+0691    mov   CH,DH                   
+0693    and   DH,0F                   
+0696    and   CH,F0                   
+0699    mov   BYTE PTR [070F],00      
+069E    mov   BYTE PTR [0716],00      
+06A3    and   CH,CH                   
+06A5    jz    06AC                    
+06A7    mov   BYTE PTR [070F],0A      
+06AC    inc   SI                      
+06AD	mov   DL,ES:[SI]
+06B0    inc   SI                      
+06B1	mov   BX,ES:[SI]
+06B4    cmp   DH,03                   
+06B7    jnz   06BF                    
+06B9    mov   AL,[0710]               
+06BC    jmp   05F6                    
+06BF    and   DL,DL                   
+06C1    jnz   06C6                    
+06C3    jmp   0729                    
+06C5    nop                           
+06C6    push  AX                      
+06C7    mov   [0713],DX               
+06CB    mov   AL,[070B]               
+06CE    and   AL,DL                   
+06D0    mov   BYTE PTR [070D],07      
+06D5    mov   DH,40                   
+06D7    mov   CH,80                   
+06D9    mov   CL,3F                   
+06DB    test  DH,DL                   
+06DD    jnz   06ED                    
+06DF    dec   BYTE PTR [070D]         
+06E3    mov   AH,AL                   
+06E5    and   AH,CH                   
+06E7    shr   AH,1                    
+06E9    and   AL,CL                   
+06EB    or    AL,AH                   
+06ED    and   CL,CL                   
+06EF    jz    06FC                    
+06F1    shr   CH,1                    
+06F3    or    CH,80                   
+06F6    shr   CL,1                    
+06F8    shr   DH,1                    
+06FA    jmp   06DB                    
+06FC    mov   CH,AL                   
+06FE    pop   AX                      
+06FF    mov   CL,[070D]               
+0703    mov   DL,01                   
+0705    shl   DL,CL                   
+0707    push  BX                      
+0708    mov   CL,CH                   
+070A    xor   CH,CH                   
+070C    add   BX,CX                   
+070E	mov   CL,ES:[BX]
+0711    pop   BX                      
+0712    xor   DH,DH                   
+0714    add   BX,DX                   
+0716    push  AX                      
+0717    mov   AL,AH                   
+0719    mul   CL                      
+071B    mov   DX,[0713]               
+071F    cmp   DH,00                   
+0722    jnz   0726                    
+0724    add   AX,AX                   
+0726    add   BX,AX                   
+0728    pop   AX                      
+0729    xor   AH,AH                   
+072B    add   BX,AX                   
+072D    cmp   DH,00                   
+0730    jnz   073E                    
+0732    add   BX,AX                   
+0734	mov   AH,ES:[BX]
+0737    inc   BX                      
+0738	mov   AL,ES:[BX]
+073B	jmp   0752
+073D    nop                           
+073E	mov   AL,ES:[BX]
+0741    mov   AH,00                   
+0743    cmp   DH,01                   
+0746    jz    0752                    
+0748    mov   AH,1F                   
+074A    cmp   DH,02                   
+074D    jz    0752                    
+074F    mov   AX,0023                 
+0752    call  07EE                    
+0755    mov   BYTE PTR [070C],00      
+075A    ret                           
+
+/*
+**  Reaktion auf eine Besondere Taste : Umsch,Fest,Extra,Krtl,Annullier
+*/
+
+075B    mov   CL,AL                   
+075D    and   CL,0F                   
+0760    mov   AH,01                   
+0762    and   CL,CL                   
+0764    jz    0768                    
+0766    rol   AH,CL                   
+0768    mov   CL,04                   
+076A    shr   AL,CL                   
+076C    cmp   AL,09                   
+076E    jz    0787                    
+0770    cmp   AL,08                   
+0772    jz    078E                    
+0774    cmp   AL,0A                   
+0776    jz    0798                    
+0778    cmp   AL,0B                   
+077A    jnz   077A                    
+077C    xor   [070A],AH               
+0780    mov   [070C],AH               
+0784    jmp   07BA                    
+0786    nop                           
+0787    or    [070A],AH               
+078B    jmp   07BA                    
+078D    nop                           
+078E    xor   AH,FF                   
+0791    and   [070A],AH               
+0795    jmp   07BA                    
+0797    nop                           
+0798    xor   [070A],AH               
+079C    test  AH,04                   
+079F    jz    07BA                    
+07A1    and   AH,[070A]               
+07A5    jz    07B2                    
+07A7	mov   BL,10			10H senden, Caps Lock LED an
+07A9	mov   CX,0001			ein einzelnes Zeichen
+07AC	call  096D			Zeichen an Tastatur senden
+07AF    jmp   07BA                    
+07B1    nop                           
+07B2	mov   BL,11			11H senden, Caps Lock LED aus
+07B4	mov   CX,0001			ein einzelnes Zeichen
+07B7	call  096D			Zeichen an Tastatur senden
+07BA    mov   AH,[070A]               
+07BE    mov   [070B],AH               
+07C2    shr   BYTE PTR [070B],1       
+07C6    and   AH,01                   
+07C9    or    [070B],AH               
+07CD    ret                           
+
+/*
+**  Heraussuchen von Sondertasten : Umsch.,Krtl.,Extra,Fest,Cancel
+**
+**  Parameter:
+**	AL	mit Zeichencode von Tastatur
+**	ES	auf Segment mit Tastaturcode Tabellen
+**
+**  Rückgabe:
+**	SI	mit SI auf das Zeichen in der Tabelle hinter AL
+**		oder wenn AL nicht gefunden auf Ende der Tabelle
+**
+**  nur Register SI,DI verändert
+*/
+
+07CE    cld                           
+07CF    push  AX                      
+07D0    push  CX                      
+07D1    xchg  DI,SI                   
+07D3	mov   DI,0080
+07D6	xor   CX,CX
+07D8	mov   CL,ES:[DI]		CX = Anzahl der Einträge in der Tabelle
+07DB    inc   DI                      
+07DC    scasb                         
+07DD	je    07E7			falls gefunden
+07DF	inc   DI			insgesamt: DI += 2
+07E0	loop  07DC			bis Ende der Liste
+07E2    xchg  DI,SI                   
+07E4    pop   CX                      
+07E5    pop   AX                      
+07E6    ret                           
+
+07E7    xchg  DI,SI                   
+07E9    pop   CX                      
+07EA    pop   AX                      
+07EB    es:                           
+07EC	lodsb
+07ED    ret                           
+
+/*
+**  Tabelle aus dem Segment der Tastaturtabellen
+**  erstes Byte = Anzahl der Einträge
+**  folgende Wörter:
+**     Byte wie er bei Drücken der Taste von Tastatur gesendet wird
+**     Byte in das Übersetzt wird
+*/
+
+0080	DB 09H			      9 Einträge in der Tabelle
+	DB 9BH, 80H			1B + 80 -> gedrückte linke Umsch.Taste
+	DB B5H, 81H			35 + 80 -> gedrückte rechte Umsch.Taste
+	DB 1BH, 90H			1B	-> linke Umsch.Taste
+	DB 35H, 91H			35	-> rechte Umsch.Taste
+	DB 1EH, A2H			1E	-> Fest Taste
+	DB A4H, 83H			24 + 80 -> gedrückte Ktrl.Taste
+	DB 24H, 93H			24	-> Ktrl.Taste
+	DB A5H, 84H			25 + 80 -> gedrückte Extra Taste
+	DB 25H, 94H			25	-> Extra Taste
+	DB 12H, 5EH			12	-> Annullier Taste
+
+/*
+**  Ein Zeichen von der Tastatur entgegennehmen
+**  Beachtet besondere Reaktionen auf ^S,^Q,^C,Cancel,
+**				  2nd + Command gefolgt von Cancel
+**
+**  Parameter
+**	AH	Zeichen davor von Tastatur, noch nicht abgearbeitet
+**	AL	neues Zeichen von Tastatur
+**
+**  Rückgabe
+**	keine
+**
+**  erhält Register CX, Segmentregister
+*/
+
+07EE    push  CX                      
+07EF    cmp   BYTE PTR [0715],00      
+07F4    jnz   07FD                    
+07F6	cmp   AH,1E			altes Zeiche 'dead key' ?
+07F9	jnz   07FD			  ja
+07FB    pop   CX                      
+07FC    ret                           
+
+07FD    cmp   AL,1C                   
+07FF    jnz   080D                    
+0801	cmp   AH,1F			Funktionstaste gedrückt ?
+0804    jz    0809                    
+0806	jmp   0F54			warmboot auslösen
+0809    pop   CX                      
+080A	jmp   0963
+
+080D    mov   [0711],AX               
+0810	cmp   AX,1FE0			ist es 'Cancel key'
+0813	jnz   0855			 nein, sonst berabeiten:
+0815	xor   AL,AL			AL = 0, event 'go by hardware'
+0817	mov   BX,000A			event "Cancel key pressed"
+081A	call  0AD2			bios event auslösen
+081D    jnb   0848                    
+081F    mov   AX,[0711]               
+0822	mov   [02F4],AH 		nur 'cancel key' in Eingabebuffer
+0826    mov   [02F5],AL               
+0829	mov   WORD PTR [02EC],0000	nächste Leseposition
+082F	mov   WORD PTR [02EE],0002	nächste Schreibposition
+0835	mov   WORD PTR [02F0],0002	nur diese beiden Zeichen sind im Buffer
+083B    mov   BYTE PTR [070E],00      
+0840    mov   BYTE PTR [0716],00      
+0845	jmp   08E4			fertig, eine Taste wurde angenommen
+0848    mov   BYTE PTR [070E],00      
+084D    mov   BYTE PTR [0716],00      
+0852	jmp   08F0			fertig, Clicken und beenden
+0855    or    AH,AH                   
+0857    jnz   08A2                    
+0859	cmp   AL,03			wurde ^C gedrückt ?
+085B    jnz   0885                    
+085D	xor   AL,AL			AL = 0, event 'go by hardware'
+085F	mov   BX,0009			event "Control-C pressed"
+0862	call  0AD2			bios event auslösen
+0865    jnb   0848                    
+0867	mov   BYTE PTR [02F4],03	nur ^C im Buffer
+086C	mov   WORD PTR [02EC],0000	nächste Leseposition
+0872	mov   WORD PTR [02EE],0001	nächstes Schreibposition
+0878	mov   WORD PTR [02F0],0001	ein Zeichen befinden sich im Buffer
+087E	mov   BYTE PTR [0660],FF	ggf. gestoppte Ausgabe freigeben
+0883    jmp   083B                    
+0885    cmp   BYTE PTR [0661],00      
+088A    jz    08A2                    
+088C	cmp   AL,11			wurde ^Q gedrückt
+088E    jnz   0897                    
+0890	mov   BYTE PTR [0660],FF	falls ja, Ausgabe stoppen
+0895    jmp   0848                    
+0897	cmp   AL,13			wurde ^S gedrückt
+0899    jnz   08A2                    
+089B	mov   BYTE PTR [0660],00	falls ja, Ausgabe freigenben
+08A0    jmp   0848                    
+08A2	mov   BX,0001			ein Zeichen aus AL speichern
+08A5	or    AH,AH			auch aus AH ?
+08A7    jz    08AA                    
+08A9	inc   BX			falls ja, dann zwei Zeichen speichern
+08AA	mov   CX,[02EA] 		max. Zeichenzahl in Buffer
+08AE	sub   CX,[02F0] 		cx := Anzahl freier Plätze im Buffer
+08B2	cmp   CX,BX			ausreichend ?
+08B4	jb    08FA			nein, beeper auslösen, nicht speichern
+08B6	mov   CX,[02EA] 		Ende des Buffers merken
+08BA	mov   BX,[02EE] 		BX auf nächste Schreibposition
+08BE	or    AH,AH			ist in AH auch ein Zeichen ?
+08C0	jz    08D1			 nein, nur AL enthält ein Zeichen
+08C2	mov   [BX+02F4],AH		Zeichen aus AH in den Buffer geben
+08C6	inc   BX			Schreibposition weiterschieben
+08C7    cmp   BX,CX                   
+08C9    jnz   08CD                    
+08CB	xor   BX,BX			bei Bufferende wieder von vorne
+08CD	inc   WORD PTR [02F0]		Ein Zeichen ist jetzt mehr im Buffer
+08D1	mov   [BX+02F4],AL		Zeichen aus AL in den Buffer
+08D5	inc   BX			Schreibposition wieterschieben
+08D6    cmp   BX,CX                   
+08D8    jnz   08DC                    
+08DA	xor   BX,BX			bei Bufferende wieder von vorne
+08DC	mov   [02EE],BX 		neue nächstes Schreibposition speichern
+08E0	inc   WORD PTR [02F0]		ein Zeichen mehr im Buffer
+08E4	mov   AL,FF			al != 0, 'normaler' event
+08E6	mov   BX,0006			event 'Keyboard input character ready'
+08E9    mov   BP,[0711]               
+08ED	call  0AD2			bios event auslösen
+08F0	mov   BL,0A			0AH an Tastatur senden, Clicker
+08F2	mov   CX,0001			ein einzelnes Zeichen
+08F5	call  096D			Zeichen an Tastatur senden
+08F8    pop   CX                      
+08F9	ret				fertig
+
+08FA	mov   BL,0B			0BH an Tastatur senden, Beep
+08FC	mov   CX,0001			ein einzelnes Zeichen
+08FF	call  096D			Zeichen an Tastatur senden
+0902    pop   CX                      
+0903	ret				fertig
+
+/*
+**
+*/
+
+0904    cmp   BYTE PTR [070F],00      
+0909    jz    0923                    
+090B    cmp   BYTE PTR [070E],00      
+0910    jz    091E                    
+0912    dec   BYTE PTR [070F]         
+0916    jnz   0923                    
+0918    mov   BYTE PTR [0716],FF      
+091D    ret                           
+
+091E    mov   BYTE PTR [070F],00      
+0923    ret                           
+
+/*
+**  Autorepeat Funktion für lezten Tastenanschlag
+*/
+
+0924    pushf                         
+0925	cli				Interrupts verhindern
+0926    cmp   BYTE PTR [070E],00      
+092B    jz    0956                    
+092D    cmp   BYTE PTR [0716],00      
+0932	jz    0960			sofort wieder zurück
+0934	cmp   WORD PTR [02F0],+00	falls nichtabgeholte Zeichen im Buffer
+0939	jnz   0960			sofort wieder zurück
+093B    push  AX                      
+093C    push  SI                      
+093D	push  DI
+093E    push  ES                      
+093F    mov   BYTE PTR [0716],00      
+0944    mov   BYTE PTR [070F],01      
+0949	mov   AX,[0711] 		letztes Zeichen aus Zwischenbuffer holen
+094C	call  07EE			Zeichen von Tastaur erfassen lassen
+094F    pop   ES                      
+0950    pop   DI                      
+0951    pop   SI                      
+0952    pop   AX                      
+0953    popf                          
+0954    stc                           
+0955    ret                           
+
+0956    mov   BYTE PTR [070F],00      
+095B    mov   BYTE PTR [0716],00      
+0960    popf                          
+0961    clc                           
+0962    ret                           
+
+0963    ret                           
